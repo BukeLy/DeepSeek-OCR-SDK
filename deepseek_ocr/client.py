@@ -9,7 +9,7 @@ import base64
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import aiohttp
 import fitz  # PyMuPDF
@@ -94,16 +94,63 @@ class DeepSeekOCR:
             f"Initialized DeepSeekOCR client with model: {self.config.model_name}"
         )
 
-    def _pdf_to_base64(self, file_path: Union[str, Path], dpi: int) -> str:
+    def _pdf_page_to_base64(self, doc: fitz.Document, page_num: int, dpi: int) -> str:
         """
-        Convert PDF first page to base64-encoded image.
+        Convert a single PDF page to base64-encoded image.
 
         Args:
-            file_path: Path to the PDF file.
+            doc: PyMuPDF document object.
+            page_num: Page number (0-indexed).
             dpi: DPI for rendering (150, 200, or 300).
 
         Returns:
             Base64-encoded image string.
+
+        Raises:
+            FileProcessingError: If page cannot be processed.
+        """
+        try:
+            page = doc[page_num]
+            # Render page to image
+            mat = fitz.Matrix(dpi / 72, dpi / 72)
+            pix = page.get_pixmap(matrix=mat)
+
+            # Convert to bytes
+            img_bytes = pix.tobytes("png")
+
+            # Encode to base64
+            b64_string = base64.b64encode(img_bytes).decode("utf-8")
+            logger.debug(
+                f"Converted page {page_num + 1} to image: "
+                f"{len(b64_string)} bytes at {dpi} DPI"
+            )
+            return b64_string
+
+        except Exception as e:
+            raise FileProcessingError(
+                f"Failed to process page {page_num + 1}: {e}"
+            ) from e
+
+    def _pdf_to_base64(
+        self,
+        file_path: Union[str, Path],
+        dpi: int,
+        pages: Optional[Union[int, list]] = None,
+    ) -> Union[str, list]:
+        """
+        Convert PDF pages to base64-encoded image(s).
+
+        Args:
+            file_path: Path to the PDF file.
+            dpi: DPI for rendering (150, 200, or 300).
+            pages: Page(s) to process. Can be:
+                   - None: Process all pages (default)
+                   - int: Process single page (1-indexed)
+                   - list: Process specific pages (1-indexed)
+
+        Returns:
+            Base64-encoded image string (single page) or
+            list of strings (multiple pages).
 
         Raises:
             FileProcessingError: If file cannot be processed.
@@ -117,23 +164,42 @@ class DeepSeekOCR:
             if len(doc) == 0:
                 raise FileProcessingError(f"PDF has no pages: {file_path}")
 
-            # Process only first page
-            page = doc[0]
-            # Render page to image
-            mat = fitz.Matrix(dpi / 72, dpi / 72)
-            pix = page.get_pixmap(matrix=mat)
+            # Determine which pages to process
+            if pages is None:
+                # Process all pages
+                page_nums = list(range(len(doc)))
+            elif isinstance(pages, int):
+                # Process single page (convert 1-indexed to 0-indexed)
+                if pages < 1 or pages > len(doc):
+                    raise FileProcessingError(
+                        f"Page {pages} out of range (PDF has {len(doc)} pages)"
+                    )
+                page_nums = [pages - 1]
+            else:
+                # Process list of pages (convert 1-indexed to 0-indexed)
+                page_nums = []
+                for p in pages:
+                    if p < 1 or p > len(doc):
+                        raise FileProcessingError(
+                            f"Page {p} out of range (PDF has {len(doc)} pages)"
+                        )
+                    page_nums.append(p - 1)
 
-            # Convert to bytes
-            img_bytes = pix.tobytes("png")
+            # Process pages
+            results = []
+            for page_num in page_nums:
+                b64_string = self._pdf_page_to_base64(doc, page_num, dpi)
+                results.append(b64_string)
+
             doc.close()
 
-            # Encode to base64
-            b64_string = base64.b64encode(img_bytes).decode("utf-8")
-            logger.debug(
-                f"Converted PDF to image: {len(b64_string)} bytes at {dpi} DPI"
-            )
-            return b64_string
+            # Return single string if single page, list otherwise
+            if len(results) == 1:
+                return results[0]
+            return results
 
+        except FileProcessingError:
+            raise
         except Exception as e:
             raise FileProcessingError(f"Failed to process PDF: {e}") from e
 
@@ -293,6 +359,7 @@ class DeepSeekOCR:
         file_path: Union[str, Path],
         mode: Union[str, OCRMode] = OCRMode.FREE_OCR,
         dpi: Optional[int] = None,
+        pages: Optional[Union[int, List[int]]] = None,
     ) -> str:
         """
         Parse document asynchronously.
@@ -301,6 +368,10 @@ class DeepSeekOCR:
             file_path: Path to PDF or image file.
             mode: OCR mode ("free_ocr", "grounding", "ocr_image" or enum).
             dpi: DPI for PDF conversion. If None, uses config default.
+            pages: Page(s) to process. Can be:
+                   - None: Process all pages (default)
+                   - int: Process single page (1-indexed)
+                   - list: Process specific pages (1-indexed)
 
         Returns:
             Extracted text in Markdown format.
@@ -319,6 +390,11 @@ class DeepSeekOCR:
             ...     mode="grounding",
             ...     dpi=300
             ... )
+            >>> # Process specific pages
+            >>> text = await client.parse_async(
+            ...     "document.pdf",
+            ...     pages=[1, 3, 5]
+            ... )
         """
         # Convert mode string to enum if needed
         if isinstance(mode, str):
@@ -330,46 +406,71 @@ class DeepSeekOCR:
 
         # Convert PDF to base64
         logger.info(f"Processing {file_path} with mode={mode} and dpi={dpi}")
-        image_b64 = self._pdf_to_base64(file_path, dpi)
+        image_b64_result = self._pdf_to_base64(file_path, dpi, pages)
 
         # Build prompt
         prompt = self._build_prompt(mode)
 
-        # Make API request
-        result = await self._make_api_request_async(image_b64, prompt)
+        # Handle single page or multiple pages
+        if isinstance(image_b64_result, str):
+            # Single page
+            images = [image_b64_result]
+        else:
+            # Multiple pages
+            images = image_b64_result
 
-        # Extract text from response
-        if "choices" not in result or len(result["choices"]) == 0:
-            raise APIError("Invalid API response: no choices returned")
+        # Process all pages
+        all_texts = []
+        for page_idx, image_b64 in enumerate(images):
+            logger.debug(f"Processing page {page_idx + 1}/{len(images)}")
 
-        text = result["choices"][0]["message"]["content"]
-        text = self._clean_output(text)
+            # Make API request
+            result = await self._make_api_request_async(image_b64, prompt)
 
-        # Log token usage
-        usage = result.get("usage", {})
-        logger.debug(
-            f"API usage: prompt_tokens={usage.get('prompt_tokens')}, "
-            f"completion_tokens={usage.get('completion_tokens')}, "
-            f"total_tokens={usage.get('total_tokens')}"
+            # Extract text from response
+            if "choices" not in result or len(result["choices"]) == 0:
+                raise APIError("Invalid API response: no choices returned")
+
+            text = result["choices"][0]["message"]["content"]
+            text = self._clean_output(text)
+
+            # Log token usage
+            usage = result.get("usage", {})
+            logger.debug(
+                f"Page {page_idx + 1} API usage: "
+                f"prompt_tokens={usage.get('prompt_tokens')}, "
+                f"completion_tokens={usage.get('completion_tokens')}, "
+                f"total_tokens={usage.get('total_tokens')}"
+            )
+
+            # Intelligent fallback for single page processing
+            if (
+                len(images) == 1
+                and self.config.fallback_enabled
+                and mode == OCRMode.FREE_OCR
+                and len(text) < self.config.min_output_threshold
+            ):
+                logger.warning(
+                    f"Output too short ({len(text)} chars), "
+                    f"falling back to {self.config.fallback_mode}"
+                )
+                return await self.parse_async(
+                    file_path,
+                    mode=OCRMode(self.config.fallback_mode),
+                    dpi=dpi,
+                    pages=pages,
+                )
+
+            all_texts.append(text)
+
+        # Combine all pages with page separator
+        combined_text = "\n\n---\n\n".join(all_texts)
+
+        logger.info(
+            f"Successfully processed {file_path}: "
+            f"{len(images)} page(s), {len(combined_text)} chars"
         )
-
-        # Intelligent fallback
-        if (
-            self.config.fallback_enabled
-            and mode == OCRMode.FREE_OCR
-            and len(text) < self.config.min_output_threshold
-        ):
-            logger.warning(
-                f"Output too short ({len(text)} chars), "
-                f"falling back to {self.config.fallback_mode}"
-            )
-            return await self.parse_async(
-                file_path,
-                mode=OCRMode(self.config.fallback_mode),
-                dpi=dpi,
-            )
-
-        logger.info(f"Successfully processed {file_path}: {len(text)} chars")
+        return combined_text
         return text
 
     def parse(
@@ -377,6 +478,7 @@ class DeepSeekOCR:
         file_path: Union[str, Path],
         mode: Union[str, OCRMode] = OCRMode.FREE_OCR,
         dpi: Optional[int] = None,
+        pages: Optional[Union[int, List[int]]] = None,
     ) -> str:
         """
         Parse document synchronously.
@@ -385,6 +487,10 @@ class DeepSeekOCR:
             file_path: Path to PDF or image file.
             mode: OCR mode ("free_ocr", "grounding", "ocr_image" or enum).
             dpi: DPI for PDF conversion. If None, uses config default.
+            pages: Page(s) to process. Can be:
+                   - None: Process all pages (default)
+                   - int: Process single page (1-indexed)
+                   - list: Process specific pages (1-indexed)
 
         Returns:
             Extracted text in Markdown format.
@@ -403,6 +509,11 @@ class DeepSeekOCR:
             ...     mode="grounding",
             ...     dpi=300
             ... )
+            >>> # Process specific pages
+            >>> text = client.parse(
+            ...     "document.pdf",
+            ...     pages=[1, 3, 5]
+            ... )
         """
         # Convert mode string to enum if needed
         if isinstance(mode, str):
@@ -414,44 +525,68 @@ class DeepSeekOCR:
 
         # Convert PDF to base64
         logger.info(f"Processing {file_path} with mode={mode} and dpi={dpi}")
-        image_b64 = self._pdf_to_base64(file_path, dpi)
+        image_b64_result = self._pdf_to_base64(file_path, dpi, pages)
 
         # Build prompt
         prompt = self._build_prompt(mode)
 
-        # Make API request
-        result = self._make_api_request_sync(image_b64, prompt)
+        # Handle single page or multiple pages
+        if isinstance(image_b64_result, str):
+            # Single page
+            images = [image_b64_result]
+        else:
+            # Multiple pages
+            images = image_b64_result
 
-        # Extract text from response
-        if "choices" not in result or len(result["choices"]) == 0:
-            raise APIError("Invalid API response: no choices returned")
+        # Process all pages
+        all_texts = []
+        for page_idx, image_b64 in enumerate(images):
+            logger.debug(f"Processing page {page_idx + 1}/{len(images)}")
 
-        text = result["choices"][0]["message"]["content"]
-        text = self._clean_output(text)
+            # Make API request
+            result = self._make_api_request_sync(image_b64, prompt)
 
-        # Log token usage
-        usage = result.get("usage", {})
-        logger.debug(
-            f"API usage: prompt_tokens={usage.get('prompt_tokens')}, "
-            f"completion_tokens={usage.get('completion_tokens')}, "
-            f"total_tokens={usage.get('total_tokens')}"
+            # Extract text from response
+            if "choices" not in result or len(result["choices"]) == 0:
+                raise APIError("Invalid API response: no choices returned")
+
+            text = result["choices"][0]["message"]["content"]
+            text = self._clean_output(text)
+
+            # Log token usage
+            usage = result.get("usage", {})
+            logger.debug(
+                f"Page {page_idx + 1} API usage: "
+                f"prompt_tokens={usage.get('prompt_tokens')}, "
+                f"completion_tokens={usage.get('completion_tokens')}, "
+                f"total_tokens={usage.get('total_tokens')}"
+            )
+
+            # Intelligent fallback for single page processing
+            if (
+                len(images) == 1
+                and self.config.fallback_enabled
+                and mode == OCRMode.FREE_OCR
+                and len(text) < self.config.min_output_threshold
+            ):
+                logger.warning(
+                    f"Output too short ({len(text)} chars), "
+                    f"falling back to {self.config.fallback_mode}"
+                )
+                return self.parse(
+                    file_path,
+                    mode=OCRMode(self.config.fallback_mode),
+                    dpi=dpi,
+                    pages=pages,
+                )
+
+            all_texts.append(text)
+
+        # Combine all pages with page separator
+        combined_text = "\n\n---\n\n".join(all_texts)
+
+        logger.info(
+            f"Successfully processed {file_path}: "
+            f"{len(images)} page(s), {len(combined_text)} chars"
         )
-
-        # Intelligent fallback
-        if (
-            self.config.fallback_enabled
-            and mode == OCRMode.FREE_OCR
-            and len(text) < self.config.min_output_threshold
-        ):
-            logger.warning(
-                f"Output too short ({len(text)} chars), "
-                f"falling back to {self.config.fallback_mode}"
-            )
-            return self.parse(
-                file_path,
-                mode=OCRMode(self.config.fallback_mode),
-                dpi=dpi,
-            )
-
-        logger.info(f"Successfully processed {file_path}: {len(text)} chars")
-        return text
+        return combined_text
