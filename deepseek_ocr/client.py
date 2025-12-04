@@ -9,7 +9,7 @@ import base64
 import logging
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional, Union, List
 
 import aiohttp
 import fitz  # PyMuPDF，fitz（在 Python 中来自包 PyMuPDF）是 MuPDF 的 Python 绑定，用于读取、渲染和操作 PDF/电子文档（也支持 EPUB、CBZ、XPS 等），常用于把 PDF 页面渲染成图片、提取文字/图片/注释、操作页面等。
@@ -101,9 +101,23 @@ class DeepSeekOCR:
             f"Initialized DeepSeekOCR client with model: {self.config.model_name}"
         )
 
-    def _pdf_to_base64(self, file_path: Union[str, Path], dpi: int) -> str:
+    def _build_prompt(self, mode: OCRMode) -> str:
         """
-        Convert PDF first page to base64-encoded image.
+        Build the prompt for the API request.
+
+        Args:
+            mode: OCR mode to use.
+
+        Returns:
+            Prompt string.
+        """
+        return mode.get_prompt()
+
+
+    def _pdf_to_base64s(self, file_path: Union[str, Path], dpi: int) -> List[str]:
+        """
+        Convert all PDF pages to base64-encoded images.
+        Returns a list of base64 image strings (one per page) in page order.
 
         Args:
             file_path: Path to the PDF file.
@@ -124,40 +138,34 @@ class DeepSeekOCR:
             if len(doc) == 0:
                 raise FileProcessingError(f"PDF has no pages: {file_path}")
 
-            # Process only first page
-            page = doc[0]
-            """
-            为什么要默认只处理第一页？不应该处理所有页吗？
-            """
-            # Render page to image
-            matrix = fitz.Matrix(dpi / 72, dpi / 72)
-            pixel = page.get_pixmap(matrix=matrix)
+            b64_images: List[str] = []
+            # Render every page
+            for i in range(len(doc)):
+                page = doc[i]
+                matrix = fitz.Matrix(dpi / 72, dpi / 72)  #为什么是dpi/72？dpi不是设置150、200、300吗？是不是应该取公约数？
+                pixel = page.get_pixmap(matrix=matrix)
+                img_bytes = pixel.tobytes("png")
+                b64_images.append(base64.b64encode(img_bytes).decode("utf-8"))
 
-            # Convert to bytes
-            img_bytes = pixel.tobytes("png")
             doc.close()
-
-            # Encode to base64
-            b64_string = base64.b64encode(img_bytes).decode("utf-8")
             logger.debug(
-                f"Converted PDF to image: {len(b64_string)} bytes at {dpi} DPI"
+                f"Converted PDF to images: {len(b64_images)} pages at {dpi} DPI" #为什么是dpi/72？dpi不是设置150、200、300吗？是不是应该取公约数？
             )
-            return b64_string
+            return b64_images
 
         except Exception as e:
             raise FileProcessingError(f"Failed to process PDF: {e}") from e
 
-    def _build_prompt(self, mode: OCRMode) -> str:
+    def _parse_api_result(self, result: Dict[str, Any]) -> str:
         """
-        Build the prompt for the API request.
-
-        Args:
-            mode: OCR mode to use.
-
-        Returns:
-            Prompt string.
+        Parse the API result and return the cleaned text.
+        Raises APIError if the result is invalid.
         """
-        return mode.get_prompt()
+        if "choices" not in result or len(result["choices"]) == 0:
+            raise APIError("Invalid API response: no choices returned")
+
+        text = result["choices"][0]["message"]["content"]
+        return self._clean_output(text)
 
     def _clean_output(self, text: str) -> str:
         """
@@ -340,30 +348,65 @@ class DeepSeekOCR:
 
         # Convert PDF to base64
         logger.info(f"Processing {file_path} with mode={mode} and dpi={dpi}")
-        image_b64 = self._pdf_to_base64(file_path, dpi)
+        multi_page_pdf_image_b64 = self._pdf_to_base64s(file_path, dpi)
 
         # Build prompt
         prompt = self._build_prompt(mode)
 
-        # Make API request
-        result = await self._make_api_request_async(image_b64, prompt)
+        # If single page
+        if len(multi_page_pdf_image_b64) == 1:
+            result = await self._make_api_request_async(multi_page_pdf_image_b64[0], prompt)
+            text = self._parse_api_result(result)
+            # Log token usage
+            usage = result.get("usage", {})
+            logger.debug(
+                f"API usage: prompt_tokens={usage.get('prompt_tokens')}, "
+                f"completion_tokens={usage.get('completion_tokens')}, "
+                f"total_tokens={usage.get('total_tokens')}"
+            )
+        else:
+            # if Multiple pages: make concurrent requests and combine outputs
+            tasks = [self._make_api_request_async(img, prompt) for img in multi_page_pdf_image_b64]
+            results = await asyncio.gather(*tasks)
+            texts: List[str] = []
+            total_prompt_tokens = 0
+            total_completion_tokens = 0
+            total_tokens = 0
+            for idx, res in enumerate(results):
+                page_text = self._parse_api_result(res)
+                # Per-page fallback
+                if (
+                    self.config.fallback_enabled
+                    and mode == OCRMode.FREE_OCR
+                    and len(page_text) < self.config.min_output_threshold
+                ):
+                    logger.warning(
+                        f"Page {idx+1} output too short ({len(page_text)} chars), falling back to {self.config.fallback_mode}"
+                    )
+                    fallback_prompt = self._build_prompt(
+                        OCRMode(self.config.fallback_mode)
+                    )
+                    fallback_res = await self._make_api_request_async(multi_page_pdf_image_b64[idx], fallback_prompt)
+                    page_text = self._parse_api_result(fallback_res)
+                    # fallback usage
+                    usage = fallback_res.get("usage", {})
+                else:
+                    usage = res.get("usage", {})
 
-        # Extract text from response
-        if "choices" not in result or len(result["choices"]) == 0:
-            raise APIError("Invalid API response: no choices returned")
+                total_prompt_tokens += int(usage.get("prompt_tokens", 0))
+                total_completion_tokens += int(usage.get("completion_tokens", 0))
+                total_tokens += int(usage.get("total_tokens", 0))
+                texts.append(page_text)
 
-        text = result["choices"][0]["message"]["content"]
-        text = self._clean_output(text)
+            text = "\n\n".join(texts)
+            logger.debug(
+                f"API usage (aggregated): prompt_tokens={total_prompt_tokens}, "
+                f"completion_tokens={total_completion_tokens}, total_tokens={total_tokens}"
+            )
 
-        # Log token usage
-        usage = result.get("usage", {})
-        logger.debug(
-            f"API usage: prompt_tokens={usage.get('prompt_tokens')}, "
-            f"completion_tokens={usage.get('completion_tokens')}, "
-            f"total_tokens={usage.get('total_tokens')}"
-        )
+        # Note: single-page usage already logged; aggregated usage logged above for multi-page
 
-        # Intelligent fallback
+        # Intelligent fallback (for single-page results handled here)
         if (
             self.config.fallback_enabled
             and mode == OCRMode.FREE_OCR
@@ -424,20 +467,55 @@ class DeepSeekOCR:
 
         # Convert PDF to base64
         logger.info(f"Processing {file_path} with mode={mode} and dpi={dpi}")
-        image_b64 = self._pdf_to_base64(file_path, dpi)
+        images_b64 = self._pdf_to_base64s(file_path, dpi)
 
         # Build prompt
         prompt = self._build_prompt(mode)
 
-        # Make API request
-        result = self._make_api_request_sync(image_b64, prompt)
+        # If single page, keep old behavior
+        if len(images_b64) == 1:
+            result = self._make_api_request_sync(images_b64[0], prompt)
+            text = self._parse_api_result(result)
+            usage = result.get("usage", {})
+            logger.debug(
+                f"API usage: prompt_tokens={usage.get('prompt_tokens')}, "
+                f"completion_tokens={usage.get('completion_tokens')}, "
+                f"total_tokens={usage.get('total_tokens')}"
+            )
+        else:
+            texts: List[str] = []
+            total_prompt_tokens = 0
+            total_completion_tokens = 0
+            total_tokens = 0
+            for idx, img in enumerate(images_b64):
+                result = self._make_api_request_sync(img, prompt)
+                page_text = self._parse_api_result(result)
+                # Per-page fallback for sync
+                if (
+                    self.config.fallback_enabled
+                    and mode == OCRMode.FREE_OCR
+                    and len(page_text) < self.config.min_output_threshold
+                ):
+                    logger.warning(
+                        f"Page {idx+1} output too short ({len(page_text)} chars), falling back to {self.config.fallback_mode}"
+                    )
+                    fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
+                    fallback_result = self._make_api_request_sync(img, fallback_prompt)
+                    page_text = self._parse_api_result(fallback_result)
+                    usage = fallback_result.get("usage", {})
+                else:
+                    usage = result.get("usage", {})
 
-        # Extract text from response
-        if "choices" not in result or len(result["choices"]) == 0:
-            raise APIError("Invalid API response: no choices returned")
+                total_prompt_tokens += int(usage.get("prompt_tokens", 0))
+                total_completion_tokens += int(usage.get("completion_tokens", 0))
+                total_tokens += int(usage.get("total_tokens", 0))
+                texts.append(page_text)
 
-        text = result["choices"][0]["message"]["content"]
-        text = self._clean_output(text)
+            text = "\n\n".join(texts)
+            logger.debug(
+                f"API usage (aggregated): prompt_tokens={total_prompt_tokens}, "
+                f"completion_tokens={total_completion_tokens}, total_tokens={total_tokens}"
+            )
 
         # Log token usage
         usage = result.get("usage", {})

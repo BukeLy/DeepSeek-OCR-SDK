@@ -9,6 +9,11 @@ Place your sample PDF documents in this directory to test the examples.
 3. **chinese_document.pdf** - A document with Chinese text
 4. **doc1.pdf, doc2.pdf, doc3.pdf** - Additional documents for batch processing
 
+## mini_usage
+make a try just run
+```
+python examples/mini_usage.py
+```
 ## Notes
 
 - Sample documents are excluded from git (see .gitignore)
