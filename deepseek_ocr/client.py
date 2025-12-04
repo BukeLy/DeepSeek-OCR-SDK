@@ -135,8 +135,8 @@ class DeepSeekOCR:
         self,
         file_path: Union[str, Path],
         dpi: int,
-        pages: Optional[Union[int, list]] = None,
-    ) -> Union[str, list]:
+        pages: Optional[Union[int, List[int]]] = None,
+    ) -> Union[str, List[str]]:
         """
         Convert PDF pages to base64-encoded image(s).
 
@@ -198,9 +198,9 @@ class DeepSeekOCR:
                 return results[0]
             return results
 
-        except FileProcessingError:
-            raise
         except Exception as e:
+            if isinstance(e, FileProcessingError):
+                raise
             raise FileProcessingError(f"Failed to process PDF: {e}") from e
 
     def _build_prompt(self, mode: OCRMode) -> str:
@@ -471,7 +471,6 @@ class DeepSeekOCR:
             f"{len(images)} page(s), {len(combined_text)} chars"
         )
         return combined_text
-        return text
 
     def parse(
         self,
