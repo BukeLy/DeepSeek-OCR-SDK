@@ -51,11 +51,11 @@ class OCRConfig:
     base_url: str
     model_name: str = "deepseek-ai/DeepSeek-OCR"
     timeout: int = 60
-    max_tokens: int = 4000
+    max_tokens: int = 4000 #为什么是4000？如果图片内容很多，4000会不会不够？
     temperature: float = 0.0
     dpi: int = 200
     fallback_enabled: bool = True
-    fallback_mode: str = "grounding"
+    fallback_mode: str = "free_ocr" #应该默认使用free_ocr模式（更通用更快），而不是grounding模式（用于识别复杂表格）
     min_output_threshold: int = 500
 
     def __post_init__(self) -> None:

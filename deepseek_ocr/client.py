@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import aiohttp
-import fitz  # PyMuPDF
+import fitz  # PyMuPDF，fitz（在 Python 中来自包 PyMuPDF）是 MuPDF 的 Python 绑定，用于读取、渲染和操作 PDF/电子文档（也支持 EPUB、CBZ、XPS 等），常用于把 PDF 页面渲染成图片、提取文字/图片/注释、操作页面等。
 import requests
 
 from .config import OCRConfig
@@ -28,6 +28,8 @@ class DeepSeekOCR:
 
     This client provides both synchronous and asynchronous methods for
     document OCR processing using the DeepSeek OCR API.
+
+
 
     Example:
         >>> # Synchronous usage
@@ -56,6 +58,11 @@ class DeepSeekOCR:
         max_tokens: Optional[int] = None,
         dpi: Optional[int] = None,
         **kwargs: str,
+
+        # prompt 应该增加一个prompt参数，官方给出的几个promt确实不错，但应该给用户自定的选择
+        #    OCRMode.FREE_OCR: "Free OCR.",
+        #    OCRMode.GROUNDING: "<|grounding|>Convert the document to markdown.",
+        #    OCRMode.OCR_IMAGE: "<|grounding|>OCR this image.",
     ):
         """
         Initialize DeepSeekOCR client.
@@ -119,12 +126,15 @@ class DeepSeekOCR:
 
             # Process only first page
             page = doc[0]
+            """
+            为什么要默认只处理第一页？不应该处理所有页吗？
+            """
             # Render page to image
-            mat = fitz.Matrix(dpi / 72, dpi / 72)
-            pix = page.get_pixmap(matrix=mat)
+            matrix = fitz.Matrix(dpi / 72, dpi / 72)
+            pixel = page.get_pixmap(matrix=matrix)
 
             # Convert to bytes
-            img_bytes = pix.tobytes("png")
+            img_bytes = pixel.tobytes("png")
             doc.close()
 
             # Encode to base64
@@ -200,8 +210,8 @@ class DeepSeekOCR:
                     ],
                 }
             ],
-            "temperature": self.config.temperature,
-            "max_tokens": self.config.max_tokens,
+            "temperature": self.config.temperature,  #不知道有什么用，需要设置吗？
+            "max_tokens": self.config.max_tokens,  #不知道有什么用，需要设置吗？
         }
 
         timeout = aiohttp.ClientTimeout(total=self.config.timeout)
