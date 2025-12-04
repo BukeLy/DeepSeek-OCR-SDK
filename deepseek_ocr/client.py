@@ -443,7 +443,11 @@ class DeepSeekOCR:
                 f"total_tokens={usage.get('total_tokens')}"
             )
 
-            # Intelligent fallback for single page processing
+            # Intelligent fallback for single page processing only
+            # Note: Fallback is intentionally limited to single-page scenarios
+            # to avoid unnecessarily reprocessing entire multi-page documents.
+            # For multi-page documents, users should explicitly choose the
+            # appropriate mode if needed.
             if (
                 len(images) == 1
                 and self.config.fallback_enabled
@@ -561,7 +565,11 @@ class DeepSeekOCR:
                 f"total_tokens={usage.get('total_tokens')}"
             )
 
-            # Intelligent fallback for single page processing
+            # Intelligent fallback for single page processing only
+            # Note: Fallback is intentionally limited to single-page scenarios
+            # to avoid unnecessarily reprocessing entire multi-page documents.
+            # For multi-page documents, users should explicitly choose the
+            # appropriate mode if needed.
             if (
                 len(images) == 1
                 and self.config.fallback_enabled
