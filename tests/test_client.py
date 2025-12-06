@@ -108,3 +108,32 @@ def test_pdf_to_base64_empty_pdf():
                 client._pdf_to_base64(Path("empty.pdf"), dpi=200)
 
             assert "no pages" in str(exc_info.value).lower()
+
+
+def test_pdf_to_base64_empty_pages_list(mock_pdf):
+    """Test error handling for empty pages list."""
+    client = DeepSeekOCR(api_key="test_key", base_url="http://test.com")
+
+    with patch("fitz.open", return_value=mock_pdf):
+        with patch("pathlib.Path.exists", return_value=True):
+            # Try to process with empty list
+            with pytest.raises(FileProcessingError) as exc_info:
+                client._pdf_to_base64(Path("test.pdf"), dpi=200, pages=[])
+
+            assert "cannot be empty" in str(exc_info.value).lower()
+
+
+def test_pdf_to_base64_duplicate_pages(mock_pdf):
+    """Test deduplication of duplicate page numbers."""
+    client = DeepSeekOCR(api_key="test_key", base_url="http://test.com")
+
+    with patch("fitz.open", return_value=mock_pdf):
+        with patch("pathlib.Path.exists", return_value=True):
+            # Process pages with duplicates: [1, 2, 1, 3, 2]
+            result = client._pdf_to_base64(
+                Path("test.pdf"), dpi=200, pages=[1, 2, 1, 3, 2]
+            )
+
+            # Should return only 3 unique pages in order: [1, 2, 3]
+            assert isinstance(result, list)
+            assert len(result) == 3

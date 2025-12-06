@@ -178,13 +178,23 @@ class DeepSeekOCR:
                     page_nums = [pages - 1]
                 else:
                     # Process list of pages (convert 1-indexed to 0-indexed)
+                    if not pages:
+                        raise FileProcessingError(
+                            "Pages list cannot be empty. Use None to process all pages."
+                        )
+
+                    # Deduplicate while preserving order
+                    seen = set()
                     page_nums = []
                     for p in pages:
                         if p < 1 or p > len(doc):
                             raise FileProcessingError(
                                 f"Page {p} out of range (PDF has {len(doc)} pages)"
                             )
-                        page_nums.append(p - 1)
+                        page_idx = p - 1
+                        if page_idx not in seen:
+                            seen.add(page_idx)
+                            page_nums.append(page_idx)
 
                 # Process pages
                 results = []
@@ -364,19 +374,29 @@ class DeepSeekOCR:
         pages: Optional[Union[int, List[int]]] = None,
     ) -> str:
         """
-        Parse document asynchronously.
+        Parse document asynchronously with concurrent page processing.
+
+        IMPORTANT - Breaking Change:
+            Default behavior changed from processing only the first page to
+            processing ALL pages of a PDF. This may result in:
+            - Increased API costs
+            - Longer processing time
+            - Different output format (multi-page results separated by page_separator)
+
+            To process only the first page (old behavior), use: pages=1
 
         Args:
             file_path: Path to PDF or image file.
             mode: OCR mode ("free_ocr", "grounding", "ocr_image" or enum).
             dpi: DPI for PDF conversion. If None, uses config default.
             pages: Page(s) to process. Can be:
-                   - None: Process all pages (default)
+                   - None: Process all pages (default, BREAKING CHANGE)
                    - int: Process single page (1-indexed)
                    - list: Process specific pages (1-indexed)
 
         Returns:
-            Extracted text in Markdown format.
+            Extracted text in Markdown format. For multi-page documents,
+            pages are separated by page_separator (default: "\\n\\n---\\n\\n").
 
         Raises:
             FileProcessingError: If file cannot be processed.
@@ -385,7 +405,10 @@ class DeepSeekOCR:
 
         Example:
             >>> client = DeepSeekOCR(api_key="xxx")
+            >>> # Process all pages (new default behavior)
             >>> text = await client.parse_async("document.pdf")
+            >>> # Process only first page (old default behavior)
+            >>> text = await client.parse_async("document.pdf", pages=1)
             >>> # With options
             >>> text = await client.parse_async(
             ...     "document.pdf",
@@ -421,9 +444,8 @@ class DeepSeekOCR:
             # Multiple pages
             images = image_b64_result
 
-        # Process all pages
-        all_texts = []
-        for page_idx, image_b64 in enumerate(images):
+        # Helper function to process a single page
+        async def process_page(page_idx: int, image_b64: str) -> str:
             logger.debug(f"Processing page {page_idx + 1}/{len(images)}")
 
             # Make API request
@@ -445,32 +467,37 @@ class DeepSeekOCR:
                 f"total_tokens={usage.get('total_tokens')}"
             )
 
-            # Intelligent fallback for single page processing only
-            # Note: Fallback is intentionally limited to single-page scenarios
-            # to avoid unnecessarily reprocessing entire multi-page documents.
-            # For multi-page documents, users should explicitly choose the
-            # appropriate mode if needed.
-            if (
-                len(images) == 1
-                and self.config.fallback_enabled
-                and mode == OCRMode.FREE_OCR
-                and len(text) < self.config.min_output_threshold
-            ):
-                logger.warning(
-                    f"Output too short ({len(text)} chars), "
-                    f"falling back to {self.config.fallback_mode}"
-                )
-                return await self.parse_async(
-                    file_path,
-                    mode=OCRMode(self.config.fallback_mode),
-                    dpi=dpi,
-                    pages=pages,
-                )
+            return text
 
-            all_texts.append(text)
+        # Process all pages concurrently for better performance
+        all_texts = await asyncio.gather(
+            *[process_page(idx, img) for idx, img in enumerate(images)]
+        )
+
+        # Intelligent fallback for single page processing only
+        # Note: Fallback is intentionally limited to single-page scenarios
+        # to avoid unnecessarily reprocessing entire multi-page documents.
+        # For multi-page documents, users should explicitly choose the
+        # appropriate mode if needed.
+        if (
+            len(images) == 1
+            and self.config.fallback_enabled
+            and mode == OCRMode.FREE_OCR
+            and len(all_texts[0]) < self.config.min_output_threshold
+        ):
+            logger.warning(
+                f"Output too short ({len(all_texts[0])} chars), "
+                f"falling back to {self.config.fallback_mode}"
+            )
+            return await self.parse_async(
+                file_path,
+                mode=OCRMode(self.config.fallback_mode),
+                dpi=dpi,
+                pages=pages,
+            )
 
         # Combine all pages with page separator
-        combined_text = "\n\n---\n\n".join(all_texts)
+        combined_text = self.config.page_separator.join(all_texts)
 
         logger.info(
             f"Successfully processed {file_path}: "
@@ -488,17 +515,27 @@ class DeepSeekOCR:
         """
         Parse document synchronously.
 
+        IMPORTANT - Breaking Change:
+            Default behavior changed from processing only the first page to
+            processing ALL pages of a PDF. This may result in:
+            - Increased API costs
+            - Longer processing time
+            - Different output format (multi-page results separated by page_separator)
+
+            To process only the first page (old behavior), use: pages=1
+
         Args:
             file_path: Path to PDF or image file.
             mode: OCR mode ("free_ocr", "grounding", "ocr_image" or enum).
             dpi: DPI for PDF conversion. If None, uses config default.
             pages: Page(s) to process. Can be:
-                   - None: Process all pages (default)
+                   - None: Process all pages (default, BREAKING CHANGE)
                    - int: Process single page (1-indexed)
                    - list: Process specific pages (1-indexed)
 
         Returns:
-            Extracted text in Markdown format.
+            Extracted text in Markdown format. For multi-page documents,
+            pages are separated by page_separator (default: "\\n\\n---\\n\\n").
 
         Raises:
             FileProcessingError: If file cannot be processed.
@@ -507,7 +544,10 @@ class DeepSeekOCR:
 
         Example:
             >>> client = DeepSeekOCR(api_key="xxx")
+            >>> # Process all pages (new default behavior)
             >>> text = client.parse("document.pdf")
+            >>> # Process only first page (old default behavior)
+            >>> text = client.parse("document.pdf", pages=1)
             >>> # With options
             >>> text = client.parse(
             ...     "document.pdf",
@@ -592,7 +632,7 @@ class DeepSeekOCR:
             all_texts.append(text)
 
         # Combine all pages with page separator
-        combined_text = "\n\n---\n\n".join(all_texts)
+        combined_text = self.config.page_separator.join(all_texts)
 
         logger.info(
             f"Successfully processed {file_path}: "

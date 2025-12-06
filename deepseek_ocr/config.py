@@ -33,6 +33,7 @@ class OCRConfig:
         DS_OCR_FALLBACK_ENABLED: Enable intelligent fallback
         DS_OCR_FALLBACK_MODE: Fallback mode to use
         DS_OCR_MIN_OUTPUT_THRESHOLD: Minimum output length before fallback
+        DS_OCR_PAGE_SEPARATOR: Separator used between pages in multi-page results
 
     Attributes:
         api_key: API key for authentication (required).
@@ -45,6 +46,7 @@ class OCRConfig:
         fallback_enabled: Enable automatic fallback to better mode.
         fallback_mode: Mode to fallback to when output is insufficient.
         min_output_threshold: Minimum output length to trigger fallback.
+        page_separator: Separator string used between pages in multi-page results.
     """
 
     api_key: str
@@ -57,6 +59,7 @@ class OCRConfig:
     fallback_enabled: bool = True
     fallback_mode: str = "grounding"
     min_output_threshold: int = 500
+    page_separator: str = "\n\n---\n\n"
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -156,6 +159,11 @@ class OCRConfig:
             or os.getenv("DS_OCR_MIN_OUTPUT_THRESHOLD", "500"),
         )
         min_output_threshold = int(min_threshold_str)
+        page_separator = cast(
+            str,
+            overrides.get("page_separator")
+            or os.getenv("DS_OCR_PAGE_SEPARATOR", "\n\n---\n\n"),
+        )
 
         return cls(
             api_key=api_key,
@@ -168,4 +176,5 @@ class OCRConfig:
             fallback_enabled=fallback_enabled,
             fallback_mode=fallback_mode,
             min_output_threshold=min_output_threshold,
+            page_separator=page_separator,
         )
