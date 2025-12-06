@@ -644,7 +644,7 @@ class DeepSeekOCR:
             if "choices" not in result or len(result["choices"]) == 0:
                 raise APIError("Invalid API response: no choices returned")
 
-            text = result["choices"][0]["message"]["content"]
+            text: str = str(result["choices"][0]["message"]["content"])
             text = self._clean_output(text)
 
             # Log token usage
@@ -682,7 +682,7 @@ class DeepSeekOCR:
                         "choices" in fallback_result
                         and len(fallback_result["choices"]) > 0
                     ):
-                        text = fallback_result["choices"][0]["message"]["content"]
+                        text = str(fallback_result["choices"][0]["message"]["content"])
                         text = self._clean_output(text)
                         logger.info(
                             f"Page {page_idx + 1} fallback successful: "
