@@ -161,42 +161,44 @@ class DeepSeekOCR:
                 raise FileProcessingError(f"File not found: {file_path}")
 
             doc = fitz.open(str(file_path))
-            if len(doc) == 0:
-                raise FileProcessingError(f"PDF has no pages: {file_path}")
+            try:
+                if len(doc) == 0:
+                    raise FileProcessingError(f"PDF has no pages: {file_path}")
 
-            # Determine which pages to process
-            if pages is None:
-                # Process all pages
-                page_nums = list(range(len(doc)))
-            elif isinstance(pages, int):
-                # Process single page (convert 1-indexed to 0-indexed)
-                if pages < 1 or pages > len(doc):
-                    raise FileProcessingError(
-                        f"Page {pages} out of range (PDF has {len(doc)} pages)"
-                    )
-                page_nums = [pages - 1]
-            else:
-                # Process list of pages (convert 1-indexed to 0-indexed)
-                page_nums = []
-                for p in pages:
-                    if p < 1 or p > len(doc):
+                # Determine which pages to process
+                if pages is None:
+                    # Process all pages
+                    page_nums = list(range(len(doc)))
+                elif isinstance(pages, int):
+                    # Process single page (convert 1-indexed to 0-indexed)
+                    if pages < 1 or pages > len(doc):
                         raise FileProcessingError(
-                            f"Page {p} out of range (PDF has {len(doc)} pages)"
+                            f"Page {pages} out of range (PDF has {len(doc)} pages)"
                         )
-                    page_nums.append(p - 1)
+                    page_nums = [pages - 1]
+                else:
+                    # Process list of pages (convert 1-indexed to 0-indexed)
+                    page_nums = []
+                    for p in pages:
+                        if p < 1 or p > len(doc):
+                            raise FileProcessingError(
+                                f"Page {p} out of range (PDF has {len(doc)} pages)"
+                            )
+                        page_nums.append(p - 1)
 
-            # Process pages
-            results = []
-            for page_num in page_nums:
-                b64_string = self._pdf_page_to_base64(doc, page_num, dpi)
-                results.append(b64_string)
+                # Process pages
+                results = []
+                for page_num in page_nums:
+                    b64_string = self._pdf_page_to_base64(doc, page_num, dpi)
+                    results.append(b64_string)
 
-            doc.close()
+                # Return single string if single page, list otherwise
+                if len(results) == 1:
+                    return results[0]
+                return results
 
-            # Return single string if single page, list otherwise
-            if len(results) == 1:
-                return results[0]
-            return results
+            finally:
+                doc.close()
 
         except Exception as e:
             if isinstance(e, FileProcessingError):
