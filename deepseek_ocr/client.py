@@ -374,7 +374,7 @@ class DeepSeekOCR:
         pages: Optional[Union[int, List[int]]] = None,
     ) -> str:
         """
-        Parse document asynchronously with concurrent page processing.
+        Parse document asynchronously with concurrent page processing and per-page fallback.
 
         IMPORTANT - Breaking Change:
             Default behavior changed from processing only the first page to
@@ -384,6 +384,13 @@ class DeepSeekOCR:
             - Different output format (multi-page results separated by page_separator)
 
             To process only the first page (old behavior), use: pages=1
+
+        Intelligent Fallback:
+            Each page is individually evaluated for quality. If a page's OCR output
+            is shorter than min_output_threshold (default: 500 chars), it will
+            automatically retry with the fallback mode (default: "grounding").
+            This per-page approach ensures optimal results without reprocessing
+            all pages when only some need better quality.
 
         Args:
             file_path: Path to PDF or image file.
@@ -444,7 +451,7 @@ class DeepSeekOCR:
             # Multiple pages
             images = image_b64_result
 
-        # Helper function to process a single page
+        # Helper function to process a single page with intelligent fallback
         async def process_page(page_idx: int, image_b64: str) -> str:
             logger.debug(f"Processing page {page_idx + 1}/{len(images)}")
 
@@ -467,34 +474,36 @@ class DeepSeekOCR:
                 f"total_tokens={usage.get('total_tokens')}"
             )
 
+            # Per-page intelligent fallback
+            # If output is too short and fallback is enabled, retry with fallback mode
+            if (
+                self.config.fallback_enabled
+                and mode == OCRMode.FREE_OCR
+                and len(text) < self.config.min_output_threshold
+            ):
+                logger.warning(
+                    f"Page {page_idx + 1} output too short ({len(text)} chars), "
+                    f"falling back to {self.config.fallback_mode}"
+                )
+                # Retry this page with fallback mode
+                fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
+                fallback_result = await self._make_api_request_async(
+                    image_b64, fallback_prompt
+                )
+
+                if "choices" in fallback_result and len(fallback_result["choices"]) > 0:
+                    text = fallback_result["choices"][0]["message"]["content"]
+                    text = self._clean_output(text)
+                    logger.info(
+                        f"Page {page_idx + 1} fallback successful: {len(text)} chars"
+                    )
+
             return text
 
         # Process all pages concurrently for better performance
         all_texts = await asyncio.gather(
             *[process_page(idx, img) for idx, img in enumerate(images)]
         )
-
-        # Intelligent fallback for single page processing only
-        # Note: Fallback is intentionally limited to single-page scenarios
-        # to avoid unnecessarily reprocessing entire multi-page documents.
-        # For multi-page documents, users should explicitly choose the
-        # appropriate mode if needed.
-        if (
-            len(images) == 1
-            and self.config.fallback_enabled
-            and mode == OCRMode.FREE_OCR
-            and len(all_texts[0]) < self.config.min_output_threshold
-        ):
-            logger.warning(
-                f"Output too short ({len(all_texts[0])} chars), "
-                f"falling back to {self.config.fallback_mode}"
-            )
-            return await self.parse_async(
-                file_path,
-                mode=OCRMode(self.config.fallback_mode),
-                dpi=dpi,
-                pages=pages,
-            )
 
         # Combine all pages with page separator
         combined_text = self.config.page_separator.join(all_texts)
@@ -513,7 +522,7 @@ class DeepSeekOCR:
         pages: Optional[Union[int, List[int]]] = None,
     ) -> str:
         """
-        Parse document synchronously.
+        Parse document synchronously with per-page fallback.
 
         IMPORTANT - Breaking Change:
             Default behavior changed from processing only the first page to
@@ -523,6 +532,13 @@ class DeepSeekOCR:
             - Different output format (multi-page results separated by page_separator)
 
             To process only the first page (old behavior), use: pages=1
+
+        Intelligent Fallback:
+            Each page is individually evaluated for quality. If a page's OCR output
+            is shorter than min_output_threshold (default: 500 chars), it will
+            automatically retry with the fallback mode (default: "grounding").
+            This per-page approach ensures optimal results without reprocessing
+            all pages when only some need better quality.
 
         Args:
             file_path: Path to PDF or image file.
@@ -583,7 +599,7 @@ class DeepSeekOCR:
             # Multiple pages
             images = image_b64_result
 
-        # Process all pages
+        # Process all pages with per-page intelligent fallback
         all_texts = []
         for page_idx, image_b64 in enumerate(images):
             logger.debug(f"Processing page {page_idx + 1}/{len(images)}")
@@ -607,27 +623,29 @@ class DeepSeekOCR:
                 f"total_tokens={usage.get('total_tokens')}"
             )
 
-            # Intelligent fallback for single page processing only
-            # Note: Fallback is intentionally limited to single-page scenarios
-            # to avoid unnecessarily reprocessing entire multi-page documents.
-            # For multi-page documents, users should explicitly choose the
-            # appropriate mode if needed.
+            # Per-page intelligent fallback
+            # If output is too short and fallback is enabled, retry with fallback mode
             if (
-                len(images) == 1
-                and self.config.fallback_enabled
+                self.config.fallback_enabled
                 and mode == OCRMode.FREE_OCR
                 and len(text) < self.config.min_output_threshold
             ):
                 logger.warning(
-                    f"Output too short ({len(text)} chars), "
+                    f"Page {page_idx + 1} output too short ({len(text)} chars), "
                     f"falling back to {self.config.fallback_mode}"
                 )
-                return self.parse(
-                    file_path,
-                    mode=OCRMode(self.config.fallback_mode),
-                    dpi=dpi,
-                    pages=pages,
+                # Retry this page with fallback mode
+                fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
+                fallback_result = self._make_api_request_sync(
+                    image_b64, fallback_prompt
                 )
+
+                if "choices" in fallback_result and len(fallback_result["choices"]) > 0:
+                    text = fallback_result["choices"][0]["message"]["content"]
+                    text = self._clean_output(text)
+                    logger.info(
+                        f"Page {page_idx + 1} fallback successful: {len(text)} chars"
+                    )
 
             all_texts.append(text)
 
