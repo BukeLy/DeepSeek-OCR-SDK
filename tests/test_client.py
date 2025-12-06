@@ -37,7 +37,9 @@ def test_pdf_to_base64_all_pages(mock_pdf):
     with patch("fitz.open", return_value=mock_pdf):
         with patch("pathlib.Path.exists", return_value=True):
             # Process all pages (default)
-            result = client._pdf_to_base64(Path("test.pdf"), dpi=200, pages=None)
+            result = client._pdf_to_base64(
+                Path("test.pdf"), dpi=200, pages=None
+            )
 
             # Should return a list of 3 base64 strings
             assert isinstance(result, list)
@@ -64,7 +66,9 @@ def test_pdf_to_base64_specific_pages(mock_pdf):
     with patch("fitz.open", return_value=mock_pdf):
         with patch("pathlib.Path.exists", return_value=True):
             # Process pages 1 and 3
-            result = client._pdf_to_base64(Path("test.pdf"), dpi=200, pages=[1, 3])
+            result = client._pdf_to_base64(
+                Path("test.pdf"), dpi=200, pages=[1, 3]
+            )
 
             # Should return a list of 2 base64 strings
             assert isinstance(result, list)

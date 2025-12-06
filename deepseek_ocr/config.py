@@ -32,8 +32,10 @@ class OCRConfig:
         DS_OCR_DPI: DPI for PDF to image conversion
         DS_OCR_FALLBACK_ENABLED: Enable intelligent fallback
         DS_OCR_FALLBACK_MODE: Fallback mode to use
-        DS_OCR_MIN_OUTPUT_THRESHOLD: Minimum output length before fallback
-        DS_OCR_PAGE_SEPARATOR: Separator used between pages in multi-page results
+        DS_OCR_MIN_OUTPUT_THRESHOLD: Minimum output length before
+            fallback
+        DS_OCR_PAGE_SEPARATOR: Separator used between pages in
+            multi-page results
 
     Attributes:
         api_key: API key for authentication (required).
@@ -41,12 +43,17 @@ class OCRConfig:
         model_name: Name of the OCR model to use.
         timeout: Request timeout in seconds.
         max_tokens: Maximum number of tokens in the response.
-        temperature: Temperature for response generation (0.0 = deterministic).
-        dpi: DPI setting for PDF to image conversion (150, 200, or 300).
+        temperature: Temperature for response generation (0.0 =
+            deterministic).
+        dpi: DPI setting for PDF to image conversion (150, 200, or
+            300).
         fallback_enabled: Enable automatic fallback to better mode.
-        fallback_mode: Mode to fallback to when output is insufficient.
-        min_output_threshold: Minimum output length to trigger fallback.
-        page_separator: Separator string used between pages in multi-page results.
+        fallback_mode: Mode to fallback to when output is
+            insufficient.
+        min_output_threshold: Minimum output length to trigger
+            fallback.
+        page_separator: Separator string used between pages in
+            multi-page results.
     """
 
     api_key: str
@@ -71,11 +78,13 @@ class OCRConfig:
 
         if not self.base_url:
             raise ConfigurationError(
-                "Base URL is required. Set DS_OCR_BASE_URL environment variable "
-                "or pass base_url parameter. "
+                "Base URL is required. Set DS_OCR_BASE_URL environment "
+                "variable or pass base_url parameter. "
                 "Known provider:\n"
-                "  - SiliconFlow: https://api.siliconflow.cn/v1/chat/completions\n"
-                "Note: DeepSeek's official API does not support the DeepSeek-OCR model."
+                "  - SiliconFlow: "
+                "https://api.siliconflow.cn/v1/chat/completions\n"
+                "Note: DeepSeek's official API does not support the "
+                "DeepSeek-OCR model."
             )
 
         if self.dpi not in [150, 200, 300]:
@@ -85,7 +94,9 @@ class OCRConfig:
             )
 
         if self.timeout <= 0:
-            raise ConfigurationError(f"Timeout must be positive. Got: {self.timeout}")
+            raise ConfigurationError(
+                f"Timeout must be positive. Got: {self.timeout}"
+            )
 
         if self.max_tokens <= 0:
             raise ConfigurationError(
@@ -110,13 +121,16 @@ class OCRConfig:
             OCRConfig instance.
 
         Raises:
-            ConfigurationError: If required configuration is missing or invalid.
+            ConfigurationError: If required configuration is missing
+                or invalid.
 
         Example:
             >>> config = OCRConfig.from_env(dpi=300)
             >>> config = OCRConfig.from_env(api_key="custom_key")
         """
-        api_key = cast(str, overrides.get("api_key") or os.getenv("DS_OCR_API_KEY", ""))
+        api_key = cast(
+            str, overrides.get("api_key") or os.getenv("DS_OCR_API_KEY", "")
+        )
         base_url = cast(
             str,
             overrides.get("base_url") or os.getenv("DS_OCR_BASE_URL", ""),
@@ -127,20 +141,25 @@ class OCRConfig:
             or os.getenv("DS_OCR_MODEL", "deepseek-ai/DeepSeek-OCR"),
         )
         timeout_str = cast(
-            str, overrides.get("timeout") or os.getenv("DS_OCR_TIMEOUT", "60")
+            str,
+            overrides.get("timeout") or os.getenv("DS_OCR_TIMEOUT", "60"),
         )
         timeout = int(timeout_str)
         max_tokens_str = cast(
             str,
-            overrides.get("max_tokens") or os.getenv("DS_OCR_MAX_TOKENS", "4000"),
+            overrides.get("max_tokens")
+            or os.getenv("DS_OCR_MAX_TOKENS", "4000"),
         )
         max_tokens = int(max_tokens_str)
         temperature_str = cast(
             str,
-            overrides.get("temperature") or os.getenv("DS_OCR_TEMPERATURE", "0.0"),
+            overrides.get("temperature")
+            or os.getenv("DS_OCR_TEMPERATURE", "0.0"),
         )
         temperature = float(temperature_str)
-        dpi_str = cast(str, overrides.get("dpi") or os.getenv("DS_OCR_DPI", "200"))
+        dpi_str = cast(
+            str, overrides.get("dpi") or os.getenv("DS_OCR_DPI", "200")
+        )
         dpi = int(dpi_str)
         fallback_enabled_str = cast(
             str,
