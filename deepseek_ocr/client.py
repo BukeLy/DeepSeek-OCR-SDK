@@ -92,7 +92,7 @@ class DeepSeekOCR:
 
         self.config = OCRConfig.from_env(**overrides)
         logger.info(
-            f"Initialized DeepSeekOCR client with model: " f"{self.config.model_name}"
+            f"Initialized DeepSeekOCR client with model: {self.config.model_name}"
         )
 
     def _pdf_page_to_base64(self, doc: fitz.Document, page_num: int, dpi: int) -> str:
@@ -174,7 +174,8 @@ class DeepSeekOCR:
                     # Process single page (convert 1-indexed to 0-indexed)
                     if pages < 1 or pages > len(doc):
                         raise FileProcessingError(
-                            f"Page {pages} out of range " f"(PDF has {len(doc)} pages)"
+                            f"Page {pages} out of range. Page numbers are 1-indexed "
+                            f"(valid range: 1 to {len(doc)})"
                         )
                     page_nums = [pages - 1]
                 else:
@@ -191,7 +192,8 @@ class DeepSeekOCR:
                     for p in pages:
                         if p < 1 or p > len(doc):
                             raise FileProcessingError(
-                                f"Page {p} out of range " f"(PDF has {len(doc)} pages)"
+                                f"Page {p} out of range. Page numbers are 1-indexed "
+                                f"(valid range: 1 to {len(doc)})"
                             )
                         page_idx = p - 1
                         if page_idx not in seen:
@@ -379,7 +381,7 @@ class DeepSeekOCR:
         Parse document asynchronously with concurrent page processing
         and per-page fallback.
 
-        IMPORTANT - Breaking Change:
+        IMPORTANT - Behavior Change:
             Default behavior changed from processing only the first page
             to processing ALL pages of a PDF. This may result in:
             - Increased API costs
@@ -467,7 +469,7 @@ class DeepSeekOCR:
             if "choices" not in result or len(result["choices"]) == 0:
                 raise APIError("Invalid API response: no choices returned")
 
-            text = result["choices"][0]["message"]["content"]
+            text: str = str(result["choices"][0]["message"]["content"])
             text = self._clean_output(text)
 
             # Log token usage
@@ -493,25 +495,46 @@ class DeepSeekOCR:
                     f"{self.config.fallback_mode}"
                 )
                 # Retry this page with fallback mode
-                fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
-                fallback_result = await self._make_api_request_async(
-                    image_b64, fallback_prompt
-                )
+                try:
+                    fallback_prompt = self._build_prompt(
+                        OCRMode(self.config.fallback_mode)
+                    )
+                    fallback_result = await self._make_api_request_async(
+                        image_b64, fallback_prompt
+                    )
 
-                if "choices" in fallback_result and len(fallback_result["choices"]) > 0:
-                    text = fallback_result["choices"][0]["message"]["content"]
-                    text = self._clean_output(text)
-                    logger.info(
-                        f"Page {page_idx + 1} fallback successful: "
-                        f"{len(text)} chars"
+                    if (
+                        "choices" in fallback_result
+                        and len(fallback_result["choices"]) > 0
+                    ):
+                        text = fallback_result["choices"][0]["message"]["content"]
+                        text = self._clean_output(text)
+                        logger.info(
+                            f"Page {page_idx + 1} fallback successful: "
+                            f"{len(text)} chars"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Page {page_idx + 1} fallback failed: {e}, "
+                        f"using original result"
                     )
 
             return text
 
         # Process all pages concurrently for better performance
-        all_texts = await asyncio.gather(
-            *[process_page(idx, img) for idx, img in enumerate(images)]
+        all_results = await asyncio.gather(
+            *[process_page(idx, img) for idx, img in enumerate(images)],
+            return_exceptions=True,
         )
+
+        # Handle exceptions and collect texts
+        all_texts: List[str] = []
+        for idx, result in enumerate(all_results):
+            if isinstance(result, Exception):
+                logger.error(f"Error processing page {idx + 1}: {result}")
+                raise result  # Re-raise to maintain existing error behavior
+            # At this point, result must be str (not Exception)
+            all_texts.append(str(result))
 
         # Combine all pages with page separator
         combined_text = self.config.page_separator.join(all_texts)
@@ -532,7 +555,7 @@ class DeepSeekOCR:
         """
         Parse document synchronously with per-page fallback.
 
-        IMPORTANT - Breaking Change:
+        IMPORTANT - Behavior Change:
             Default behavior changed from processing only the first page
             to processing ALL pages of a PDF. This may result in:
             - Increased API costs
@@ -647,17 +670,28 @@ class DeepSeekOCR:
                     f"{self.config.fallback_mode}"
                 )
                 # Retry this page with fallback mode
-                fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
-                fallback_result = self._make_api_request_sync(
-                    image_b64, fallback_prompt
-                )
+                try:
+                    fallback_prompt = self._build_prompt(
+                        OCRMode(self.config.fallback_mode)
+                    )
+                    fallback_result = self._make_api_request_sync(
+                        image_b64, fallback_prompt
+                    )
 
-                if "choices" in fallback_result and len(fallback_result["choices"]) > 0:
-                    text = fallback_result["choices"][0]["message"]["content"]
-                    text = self._clean_output(text)
-                    logger.info(
-                        f"Page {page_idx + 1} fallback successful: "
-                        f"{len(text)} chars"
+                    if (
+                        "choices" in fallback_result
+                        and len(fallback_result["choices"]) > 0
+                    ):
+                        text = fallback_result["choices"][0]["message"]["content"]
+                        text = self._clean_output(text)
+                        logger.info(
+                            f"Page {page_idx + 1} fallback successful: "
+                            f"{len(text)} chars"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Page {page_idx + 1} fallback failed: {e}, "
+                        f"using original result"
                     )
 
             all_texts.append(text)
