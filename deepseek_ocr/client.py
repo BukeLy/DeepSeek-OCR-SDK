@@ -92,13 +92,10 @@ class DeepSeekOCR:
 
         self.config = OCRConfig.from_env(**overrides)
         logger.info(
-            f"Initialized DeepSeekOCR client with model: "
-            f"{self.config.model_name}"
+            f"Initialized DeepSeekOCR client with model: " f"{self.config.model_name}"
         )
 
-    def _pdf_page_to_base64(
-        self, doc: fitz.Document, page_num: int, dpi: int
-    ) -> str:
+    def _pdf_page_to_base64(self, doc: fitz.Document, page_num: int, dpi: int) -> str:
         """
         Convert a single PDF page to base64-encoded image.
 
@@ -177,8 +174,7 @@ class DeepSeekOCR:
                     # Process single page (convert 1-indexed to 0-indexed)
                     if pages < 1 or pages > len(doc):
                         raise FileProcessingError(
-                            f"Page {pages} out of range "
-                            f"(PDF has {len(doc)} pages)"
+                            f"Page {pages} out of range " f"(PDF has {len(doc)} pages)"
                         )
                     page_nums = [pages - 1]
                 else:
@@ -195,8 +191,7 @@ class DeepSeekOCR:
                     for p in pages:
                         if p < 1 or p > len(doc):
                             raise FileProcessingError(
-                                f"Page {p} out of range "
-                                f"(PDF has {len(doc)} pages)"
+                                f"Page {p} out of range " f"(PDF has {len(doc)} pages)"
                             )
                         page_idx = p - 1
                         if page_idx not in seen:
@@ -279,9 +274,7 @@ class DeepSeekOCR:
                     "content": [
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_b64}"
-                            },
+                            "image_url": {"url": f"data:image/png;base64,{image_b64}"},
                         },
                         {"type": "text", "text": prompt},
                     ],
@@ -314,9 +307,7 @@ class DeepSeekOCR:
                 f"Request timed out after {self.config.timeout} seconds"
             ) from e
 
-    def _make_api_request_sync(
-        self, image_b64: str, prompt: str
-    ) -> Dict[str, Any]:
+    def _make_api_request_sync(self, image_b64: str, prompt: str) -> Dict[str, Any]:
         """
         Make synchronous API request to DeepSeek OCR.
 
@@ -344,9 +335,7 @@ class DeepSeekOCR:
                     "content": [
                         {
                             "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/png;base64,{image_b64}"
-                            },
+                            "image_url": {"url": f"data:image/png;base64,{image_b64}"},
                         },
                         {"type": "text", "text": prompt},
                     ],
@@ -504,20 +493,13 @@ class DeepSeekOCR:
                     f"{self.config.fallback_mode}"
                 )
                 # Retry this page with fallback mode
-                fallback_prompt = self._build_prompt(
-                    OCRMode(self.config.fallback_mode)
-                )
+                fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
                 fallback_result = await self._make_api_request_async(
                     image_b64, fallback_prompt
                 )
 
-                if (
-                    "choices" in fallback_result
-                    and len(fallback_result["choices"]) > 0
-                ):
-                    text = fallback_result["choices"][0]["message"][
-                        "content"
-                    ]
+                if "choices" in fallback_result and len(fallback_result["choices"]) > 0:
+                    text = fallback_result["choices"][0]["message"]["content"]
                     text = self._clean_output(text)
                     logger.info(
                         f"Page {page_idx + 1} fallback successful: "
@@ -665,20 +647,13 @@ class DeepSeekOCR:
                     f"{self.config.fallback_mode}"
                 )
                 # Retry this page with fallback mode
-                fallback_prompt = self._build_prompt(
-                    OCRMode(self.config.fallback_mode)
-                )
+                fallback_prompt = self._build_prompt(OCRMode(self.config.fallback_mode))
                 fallback_result = self._make_api_request_sync(
                     image_b64, fallback_prompt
                 )
 
-                if (
-                    "choices" in fallback_result
-                    and len(fallback_result["choices"]) > 0
-                ):
-                    text = fallback_result["choices"][0]["message"][
-                        "content"
-                    ]
+                if "choices" in fallback_result and len(fallback_result["choices"]) > 0:
+                    text = fallback_result["choices"][0]["message"]["content"]
                     text = self._clean_output(text)
                     logger.info(
                         f"Page {page_idx + 1} fallback successful: "

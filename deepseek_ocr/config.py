@@ -94,9 +94,7 @@ class OCRConfig:
             )
 
         if self.timeout <= 0:
-            raise ConfigurationError(
-                f"Timeout must be positive. Got: {self.timeout}"
-            )
+            raise ConfigurationError(f"Timeout must be positive. Got: {self.timeout}")
 
         if self.max_tokens <= 0:
             raise ConfigurationError(
@@ -128,9 +126,7 @@ class OCRConfig:
             >>> config = OCRConfig.from_env(dpi=300)
             >>> config = OCRConfig.from_env(api_key="custom_key")
         """
-        api_key = cast(
-            str, overrides.get("api_key") or os.getenv("DS_OCR_API_KEY", "")
-        )
+        api_key = cast(str, overrides.get("api_key") or os.getenv("DS_OCR_API_KEY", ""))
         base_url = cast(
             str,
             overrides.get("base_url") or os.getenv("DS_OCR_BASE_URL", ""),
@@ -147,19 +143,15 @@ class OCRConfig:
         timeout = int(timeout_str)
         max_tokens_str = cast(
             str,
-            overrides.get("max_tokens")
-            or os.getenv("DS_OCR_MAX_TOKENS", "4000"),
+            overrides.get("max_tokens") or os.getenv("DS_OCR_MAX_TOKENS", "4000"),
         )
         max_tokens = int(max_tokens_str)
         temperature_str = cast(
             str,
-            overrides.get("temperature")
-            or os.getenv("DS_OCR_TEMPERATURE", "0.0"),
+            overrides.get("temperature") or os.getenv("DS_OCR_TEMPERATURE", "0.0"),
         )
         temperature = float(temperature_str)
-        dpi_str = cast(
-            str, overrides.get("dpi") or os.getenv("DS_OCR_DPI", "200")
-        )
+        dpi_str = cast(str, overrides.get("dpi") or os.getenv("DS_OCR_DPI", "200"))
         dpi = int(dpi_str)
         fallback_enabled_str = cast(
             str,
