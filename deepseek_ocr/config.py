@@ -6,10 +6,9 @@ environment variables and explicit parameters.
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional, cast
 
-from .enums import OCRProvider
 from .exceptions import ConfigurationError
 
 
@@ -68,13 +67,9 @@ class OCRConfig:
     fallback_mode: str = "grounding"
     min_output_threshold: int = 500
     page_separator: str = "\n\n---\n\n"
-    provider: OCRProvider = field(init=False)
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
-        # Detect provider from model name
-        self.provider = OCRProvider.from_model_name(self.model_name)
-        
         if not self.api_key:
             raise ConfigurationError(
                 "API key is required. Set DS_OCR_API_KEY environment variable "
@@ -85,11 +80,9 @@ class OCRConfig:
             raise ConfigurationError(
                 "Base URL is required. Set DS_OCR_BASE_URL environment "
                 "variable or pass base_url parameter. "
-                "Known providers:\n"
-                "  - SiliconFlow (DeepSeek): "
+                "Known provider:\n"
+                "  - SiliconFlow: "
                 "https://api.siliconflow.cn/v1/chat/completions\n"
-                "  - Alibaba Cloud (Qwen): "
-                "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions\n"
                 "Note: DeepSeek's official API does not support the "
                 "DeepSeek-OCR model."
             )

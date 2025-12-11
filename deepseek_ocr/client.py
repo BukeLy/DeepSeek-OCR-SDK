@@ -229,7 +229,7 @@ class DeepSeekOCR:
         Returns:
             Prompt string.
         """
-        return mode.get_prompt(self.config.provider)
+        return mode.get_prompt()
 
     def _clean_output(self, text: str) -> str:
         """

@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from deepseek_ocr import ConfigurationError, OCRConfig, OCRProvider
+from deepseek_ocr import ConfigurationError, OCRConfig
 
 
 def test_config_from_env_with_api_key():
@@ -29,33 +29,6 @@ def test_config_with_overrides():
     assert config.api_key == "override_key"
     assert config.base_url == "https://api.override.com/v1/chat/completions"
     assert config.dpi == 300
-
-
-def test_config_provider_detection_deepseek():
-    """Test provider auto-detection for DeepSeek models."""
-    config = OCRConfig(
-        api_key="test_key",
-        base_url="https://api.test.com/v1/chat/completions",
-        model_name="deepseek-ai/DeepSeek-OCR"
-    )
-    assert config.provider == OCRProvider.DEEPSEEK
-
-
-def test_config_provider_detection_qwen():
-    """Test provider auto-detection for Qwen models."""
-    config = OCRConfig(
-        api_key="test_key",
-        base_url="https://api.test.com/v1/chat/completions",
-        model_name="qwen-vl-ocr"
-    )
-    assert config.provider == OCRProvider.QWEN
-    
-    config2 = OCRConfig(
-        api_key="test_key",
-        base_url="https://api.test.com/v1/chat/completions",
-        model_name="qwen-vl-max-ocr"
-    )
-    assert config2.provider == OCRProvider.QWEN
 
 
 def test_config_invalid_dpi():
@@ -85,4 +58,3 @@ def test_config_defaults():
     assert config.max_tokens == 4000
     assert config.dpi == 200
     assert config.fallback_enabled is True
-    assert config.provider == OCRProvider.DEEPSEEK  # Default model is DeepSeek

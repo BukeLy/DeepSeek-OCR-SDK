@@ -15,12 +15,11 @@
 
 ### Overview
 
-**DeepSeek-OCR-SDK** is a simple and efficient Python SDK for OCR APIs, supporting both DeepSeek-OCR and Qwen-VL-OCR models. It provides a clean, production-ready interface for converting documents (PDF, images) to Markdown text with high accuracy and performance.
+**DeepSeek-OCR-SDK** is a simple and efficient Python SDK for the DeepSeek OCR API. It provides a clean, production-ready interface for converting documents (PDF, images) to Markdown text with high accuracy and performance.
 
 ### Key Features
 
 - **Simple API**: Clean and intuitive interface, minimal learning curve
-- **Multiple OCR Providers**: Support for both DeepSeek-OCR and Qwen-VL-OCR models
 - **Three OCR Modes**:
   - `FREE_OCR`: Fast mode for 80% of use cases (3.95-10.95s)
   - `GROUNDING`: Advanced mode for complex tables (5.18-8.31s)
@@ -60,16 +59,13 @@ pip install -e .
 
 ### Quick Start
 
-#### DeepSeek-OCR (via SiliconFlow)
-
 ```python
 from deepseek_ocr import DeepSeekOCR
 
-# Initialize client with DeepSeek-OCR
+# Initialize client (choose your API provider)
 client = DeepSeekOCR(
     api_key="your_api_key",
-    base_url="https://api.siliconflow.cn/v1/chat/completions",
-    model_name="deepseek-ai/DeepSeek-OCR"
+    base_url="https://api.siliconflow.cn/v1/chat/completions"  # or your provider's endpoint
 )
 
 # Parse document
@@ -77,28 +73,7 @@ text = client.parse("document.pdf")
 print(text)
 ```
 
-#### Qwen-VL-OCR (via Alibaba Cloud)
-
-```python
-from deepseek_ocr import DeepSeekOCR
-
-# Initialize client with Qwen-VL-OCR
-client = DeepSeekOCR(
-    api_key="your_alibaba_api_key",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    model_name="qwen-vl-ocr"  # or qwen-vl-max-ocr for better quality
-)
-
-# Parse document (same API!)
-text = client.parse("document.pdf")
-print(text)
-```
-
-**Supported Providers**:
-- **DeepSeek-OCR** (via SiliconFlow): Free tier available, lower TPM limits
-- **Qwen-VL-OCR** (via Alibaba Cloud): Paid service with higher concurrency limits
-
-The SDK automatically detects the provider from the model name and uses appropriate prompts.
+**Note**: This SDK supports any OpenAI-compatible API endpoint that provides the DeepSeek-OCR model. Currently known provider: **SiliconFlow** (`api.siliconflow.cn`). DeepSeek's official API does not support the DeepSeek-OCR model.
 
 ### Architecture
 
@@ -233,46 +208,13 @@ asyncio.run(batch_example())
 | Simple tables (<10 rows) | `FREE_OCR` | Avoids truncation issues |
 | Mixed content | `GROUNDING` | Handles complexity well |
 
-### Provider Selection Guide
-
-#### DeepSeek-OCR (via SiliconFlow)
-**When to use**:
-- ✅ Testing and development
-- ✅ Low-volume processing
-- ✅ Cost-sensitive projects (free tier available)
-
-**Limitations**:
-- ⚠️ Lower TPM (Tokens Per Minute) limits
-- ⚠️ May hit rate limits with large batches
-- ⚠️ Best for sequential processing
-
-**How to increase limits**: Contact SiliconFlow to upgrade your account tier
-
-#### Qwen-VL-OCR (via Alibaba Cloud)
-**When to use**:
-- ✅ Production environments
-- ✅ Large-scale batch processing
-- ✅ High concurrency requirements
-- ✅ Medical/legal document processing
-
-**Advantages**:
-- ✨ Higher TPM limits (pay-as-you-go)
-- ✨ More stable for concurrent requests
-- ✨ Enterprise-grade reliability
-- ✨ Multiple model variants (standard, max, plus)
-
-**Cost**: Paid service with flexible pricing tiers
-
-**Example use case**: Processing hundreds of medical documents daily - as mentioned in the original issue, Qwen-OCR handles 60+ pages/minute with proper rate limiting vs DeepSeek's 1-2 pages/60s limit.
-
 ### Configuration
 
 #### Environment Variables
 
-**For DeepSeek-OCR (SiliconFlow)**:
 ```bash
-export DS_OCR_API_KEY="your_siliconflow_api_key"
-export DS_OCR_BASE_URL="https://api.siliconflow.cn/v1/chat/completions"
+export DS_OCR_API_KEY="your_api_key"
+export DS_OCR_BASE_URL="https://api.siliconflow.cn/v1/chat/completions"  # REQUIRED: Set to your provider's endpoint
 export DS_OCR_MODEL="deepseek-ai/DeepSeek-OCR"
 export DS_OCR_TIMEOUT=60
 export DS_OCR_MAX_TOKENS=4000
@@ -283,60 +225,23 @@ export DS_OCR_MIN_OUTPUT_THRESHOLD=500
 export DS_OCR_PAGE_SEPARATOR="\n\n---\n\n"  # Separator between pages in multi-page PDFs
 ```
 
-**For Qwen-VL-OCR (Alibaba Cloud)**:
-```bash
-export DS_OCR_API_KEY="your_alibaba_cloud_api_key"
-export DS_OCR_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-export DS_OCR_MODEL="qwen-vl-ocr"  # or qwen-vl-max-ocr for better quality
-export DS_OCR_TIMEOUT=120
-export DS_OCR_MAX_TOKENS=8000
-export DS_OCR_DPI=200
-export DS_OCR_FALLBACK_ENABLED=true
-export DS_OCR_FALLBACK_MODE="grounding"
-export DS_OCR_MIN_OUTPUT_THRESHOLD=500
-export DS_OCR_PAGE_SEPARATOR="\n\n---\n\n"
-```
-
 **Available API Providers**:
-- **SiliconFlow (DeepSeek-OCR)**: `https://api.siliconflow.cn/v1/chat/completions` (Verified ✅)
-  - Model: `deepseek-ai/DeepSeek-OCR`
-  - Free tier available with TPM limits
-  - Can upgrade concurrency by paying
-- **Alibaba Cloud (Qwen-VL-OCR)**: `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` (Verified ✅)
-  - Models: `qwen-vl-ocr`, `qwen-vl-max-ocr`, `qwen-vl-plus-ocr`
-  - Paid service with higher TPM limits
-  - More stable for large-scale processing
-- **Others**: Contact third-party API providers for additional OCR support
+- **SiliconFlow**: `https://api.siliconflow.cn/v1/chat/completions` (Verified ✅)
+- **Others**: Contact third-party API providers for DeepSeek-OCR support
 
 **Note**: DeepSeek's official API (`api.deepseek.com`) does not support the DeepSeek-OCR model.
 
 #### Programmatic Configuration
 
-**DeepSeek-OCR**:
 ```python
-from deepseek_ocr import DeepSeekOCR
+from deepseek_ocr import DeepSeekOCR, OCRConfig
 
 # Method 1: Direct initialization
 client = DeepSeekOCR(
-    api_key="your_siliconflow_api_key",
-    base_url="https://api.siliconflow.cn/v1/chat/completions",
-    model_name="deepseek-ai/DeepSeek-OCR",
-    timeout=60,
-    dpi=200
-)
-```
-
-**Qwen-VL-OCR**:
-```python
-from deepseek_ocr import DeepSeekOCR
-
-# Method 1: Direct initialization
-client = DeepSeekOCR(
-    api_key="your_alibaba_cloud_api_key",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    model_name="qwen-vl-ocr",  # or qwen-vl-max-ocr
+    api_key="your_api_key",
+    base_url="https://api.siliconflow.cn/v1/chat/completions",  # or your provider's endpoint
     timeout=120,
-    dpi=200
+    dpi=300
 )
 
 # Method 2: Using config object (requires DS_OCR_BASE_URL environment variable)
@@ -430,12 +335,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### 简介
 
-**DeepSeek-OCR-SDK** 是一个简单高效的 Python SDK，支持 DeepSeek-OCR 和 Qwen-VL-OCR 模型。它提供了简洁、生产级的接口，可以高精度、高性能地将文档（PDF、图片）转换为 Markdown 文本。
+**DeepSeek-OCR-SDK** 是一个简单高效的 Python SDK，用于调用 DeepSeek OCR API。它提供了简洁、生产级的接口，可以高精度、高性能地将文档（PDF、图片）转换为 Markdown 文本。
 
 ### 核心特性
 
 - **简单易用**：API 简洁直观，学习成本低
-- **多个 OCR 提供商**：支持 DeepSeek-OCR 和 Qwen-VL-OCR 模型
 - **三种 OCR 模式**：
   - `FREE_OCR`：快速模式，适用于 80% 的场景（3.95-10.95秒）
   - `GROUNDING`：高级模式，适用于复杂表格（5.18-8.31秒）
@@ -475,45 +379,10 @@ pip install -e .
 
 ### 快速开始
 
-#### DeepSeek-OCR（通过硅基流动）
-
 ```python
 from deepseek_ocr import DeepSeekOCR
 
-# 使用 DeepSeek-OCR 初始化客户端
-client = DeepSeekOCR(
-    api_key="your_api_key",
-    base_url="https://api.siliconflow.cn/v1/chat/completions",
-    model_name="deepseek-ai/DeepSeek-OCR"
-)
-
-# 解析文档
-text = client.parse("document.pdf")
-print(text)
-```
-
-#### Qwen-VL-OCR（通过阿里云）
-
-```python
-from deepseek_ocr import DeepSeekOCR
-
-# 使用 Qwen-VL-OCR 初始化客户端
-client = DeepSeekOCR(
-    api_key="your_alibaba_api_key",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    model_name="qwen-vl-ocr"  # 或 qwen-vl-max-ocr 以获得更好的质量
-)
-
-# 解析文档（相同的 API！）
-text = client.parse("document.pdf")
-print(text)
-```
-
-**支持的提供商**：
-- **DeepSeek-OCR**（通过硅基流动）：提供免费套餐，TPM 限制较低
-- **Qwen-VL-OCR**（通过阿里云）：付费服务，具有更高的并发限制
-
-SDK 会自动从模型名称检测提供商并使用适当的提示词。
+# 初始化客户端（选择您的 API 提供商）
 client = DeepSeekOCR(
     api_key="your_api_key",
     base_url="https://api.siliconflow.cn/v1/chat/completions"  # 或您的提供商端点
@@ -659,46 +528,13 @@ asyncio.run(batch_example())
 | 简单表格（<10 行） | `FREE_OCR` | 避免截断问题 |
 | 混合内容 | `GROUNDING` | 处理复杂性好 |
 
-### 提供商选择指南
-
-#### DeepSeek-OCR（通过硅基流动）
-**适用场景**：
-- ✅ 测试和开发
-- ✅ 低容量处理
-- ✅ 成本敏感的项目（提供免费套餐）
-
-**限制**：
-- ⚠️ 较低的 TPM（每分钟令牌数）限制
-- ⚠️ 大批量处理时可能触及速率限制
-- ⚠️ 最适合顺序处理
-
-**如何提高限制**：联系硅基流动升级您的账户等级
-
-#### Qwen-VL-OCR（通过阿里云）
-**适用场景**：
-- ✅ 生产环境
-- ✅ 大规模批处理
-- ✅ 高并发需求
-- ✅ 医疗/法律文档处理
-
-**优势**：
-- ✨ 更高的 TPM 限制（按使用量付费）
-- ✨ 对并发请求更稳定
-- ✨ 企业级可靠性
-- ✨ 多个模型变体（标准版、max、plus）
-
-**成本**：付费服务，灵活的价格等级
-
-**使用案例示例**：如原始问题中所述，处理数百份医疗文档 - Qwen-OCR 在适当的速率限制下可处理 60+ 页/分钟，而 DeepSeek 的限制为 1-2 页/60秒。
-
 ### 配置
 
 #### 环境变量
 
-**DeepSeek-OCR（硅基流动）**：
 ```bash
-export DS_OCR_API_KEY="your_siliconflow_api_key"
-export DS_OCR_BASE_URL="https://api.siliconflow.cn/v1/chat/completions"
+export DS_OCR_API_KEY="your_api_key"
+export DS_OCR_BASE_URL="https://api.siliconflow.cn/v1/chat/completions"  # 必填：设置为您的提供商端点
 export DS_OCR_MODEL="deepseek-ai/DeepSeek-OCR"
 export DS_OCR_TIMEOUT=60
 export DS_OCR_MAX_TOKENS=4000
@@ -706,64 +542,31 @@ export DS_OCR_DPI=200
 export DS_OCR_FALLBACK_ENABLED=true
 export DS_OCR_FALLBACK_MODE="grounding"
 export DS_OCR_MIN_OUTPUT_THRESHOLD=500
-export DS_OCR_PAGE_SEPARATOR="\n\n---\n\n"
-```
-
-**Qwen-VL-OCR（阿里云）**：
-```bash
-export DS_OCR_API_KEY="your_alibaba_cloud_api_key"
-export DS_OCR_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
-export DS_OCR_MODEL="qwen-vl-ocr"  # 或 qwen-vl-max-ocr 以获得更好的质量
-export DS_OCR_TIMEOUT=120
-export DS_OCR_MAX_TOKENS=8000
-export DS_OCR_DPI=200
-export DS_OCR_FALLBACK_ENABLED=true
-export DS_OCR_FALLBACK_MODE="grounding"
-export DS_OCR_MIN_OUTPUT_THRESHOLD=500
-export DS_OCR_PAGE_SEPARATOR="\n\n---\n\n"
+export DS_OCR_PAGE_SEPARATOR="\n\n---\n\n"  # Separator between pages in multi-page PDFs
 ```
 
 **可用的 API 提供商**：
-- **硅基流动（DeepSeek-OCR）**：`https://api.siliconflow.cn/v1/chat/completions` (已验证 ✅)
-  - 模型：`deepseek-ai/DeepSeek-OCR`
-  - 提供免费套餐，有 TPM 限制
-  - 可通过付费升级并发限制
-- **阿里云（Qwen-VL-OCR）**：`https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions` (已验证 ✅)
-  - 模型：`qwen-vl-ocr`、`qwen-vl-max-ocr`、`qwen-vl-plus-ocr`
-  - 付费服务，具有更高的 TPM 限制
-  - 更适合大规模处理
-- **其他**：联系第三方 API 提供商以获取额外的 OCR 支持
+- **硅基流动（SiliconFlow）**：`https://api.siliconflow.cn/v1/chat/completions` (已验证 ✅)
+- **其他**：联系第三方 API 提供商以获取 DeepSeek-OCR 支持
 
 **注意**：DeepSeek 官方 API (`api.deepseek.com`) 不支持 DeepSeek-OCR 模型。
 
 #### 编程式配置
 
-**DeepSeek-OCR**：
 ```python
-from deepseek_ocr import DeepSeekOCR
+from deepseek_ocr import DeepSeekOCR, OCRConfig
 
 # 方法 1：直接初始化
 client = DeepSeekOCR(
-    api_key="your_siliconflow_api_key",
-    base_url="https://api.siliconflow.cn/v1/chat/completions",
-    model_name="deepseek-ai/DeepSeek-OCR",
-    timeout=60,
-    dpi=200
-)
-```
-
-**Qwen-VL-OCR**：
-```python
-from deepseek_ocr import DeepSeekOCR
-
-# 方法 1：直接初始化
-client = DeepSeekOCR(
-    api_key="your_alibaba_cloud_api_key",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-    model_name="qwen-vl-ocr",  # 或 qwen-vl-max-ocr
+    api_key="your_api_key",
+    base_url="https://api.siliconflow.cn/v1/chat/completions",  # 或您的提供商端点
     timeout=120,
-    dpi=200
+    dpi=300
 )
+
+# 方法 2：使用配置对象（需要设置 DS_OCR_BASE_URL 环境变量）
+config = OCRConfig.from_env(api_key="your_api_key", dpi=300)
+client = DeepSeekOCR(api_key=config.api_key, base_url=config.base_url)
 ```
 
 ### DPI 推荐

@@ -53,8 +53,8 @@ def test_config_defaults():
         api_key="test_key", base_url="https://api.test.com/v1/chat/completions"
     )
     assert config.base_url == "https://api.test.com/v1/chat/completions"
-    assert config.model_name == "deepseek-ai/DeepSeek-OCR"
-    assert config.timeout == 60
-    assert config.max_tokens == 4000
+    assert config.model_name == "qwen-vl-ocr"
+    assert config.timeout == 120
+    assert config.max_tokens == 8000
     assert config.dpi == 200
     assert config.fallback_enabled is True

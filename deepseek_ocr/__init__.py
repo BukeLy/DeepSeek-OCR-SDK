@@ -20,7 +20,7 @@ Features:
 from .batch import BatchProcessor, BatchResult, BatchSummary
 from .client import DeepSeekOCR
 from .config import OCRConfig
-from .enums import OCRMode, OCRProvider
+from .enums import OCRMode
 from .exceptions import (
     APIError,
     ConfigurationError,
@@ -41,7 +41,6 @@ __all__ = [
     "OCRConfig",
     # Enums
     "OCRMode",
-    "OCRProvider",
     # Batch processing
     "BatchProcessor",
     "BatchResult",
