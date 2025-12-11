@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Qwen-OCR-SDK Branch
+
+### Added
+
+- **Multi-provider support**: SDK now supports both DeepSeek-OCR and Qwen-VL-OCR models
+- New `OCRProvider` enum to distinguish between different OCR providers
+- Provider auto-detection from model name (e.g., "qwen-vl-ocr" → `OCRProvider.QWEN`)
+- Provider-specific prompt generation for optimal results
+- Support for Qwen-VL-OCR models:
+  - `qwen-vl-ocr` - Standard model
+  - `qwen-vl-max-ocr` - Enhanced model for complex documents
+  - `qwen-vl-plus-ocr` - Balanced performance and cost
+- Comprehensive Qwen-OCR usage examples (`examples/03_qwen_ocr_usage.py`)
+- Provider selection guide in README (English and Chinese)
+- Configuration examples for both DeepSeek and Qwen providers
+- Tests for provider detection and Qwen-specific functionality
+
+### Changed
+
+- `OCRMode.get_prompt()` now accepts optional `provider` parameter
+- `OCRConfig` auto-detects and stores provider based on model name
+- Updated configuration error messages to include both providers
+- Enhanced documentation with Qwen-OCR setup instructions
+
+### Benefits
+
+- **Higher concurrency**: Qwen-VL-OCR offers significantly higher TPM limits
+- **Scalability**: Pay-as-you-go pricing for production workloads
+- **Flexibility**: Choose provider based on requirements (free tier vs production)
+- **Same API**: Zero code changes needed to switch between providers
+
+### Backward Compatibility
+
+- ✅ All existing DeepSeek-OCR code works without modification
+- ✅ All 34 tests pass including new provider-specific tests
+- ✅ Default provider remains DeepSeek for backward compatibility
+
 ## [0.2.0] - 2025-12-07
 
 ### Breaking Changes
